@@ -45,10 +45,40 @@ Open `main/led_blink_main.c` and change the constants at the top:
 | `WIFI_PASS` | `"rafa123$$$"` | Senha da rede WiFi |
 | `LED_COLOR_R/G/B` | 20, 20, 20 | Cor do LED (0–255 cada canal) |
 
+## Email notification (workbench_email)
+
+A companion project that connects to WiFi, syncs the current time via NTP, and sends an email notification through a relay server running on the Pi.
+
+| Component | Description |
+|-----------|-------------|
+| `workbench_email/main/workbench_email.c` | ESP32-S3 firmware — WiFi + NTP + HTTP POST to relay |
+| `workbench_email/pi_mail_relay.py` | Python relay server on the Pi — receives HTTP and sends SMTP email |
+
+**How it works:**
+1. ESP32 connects to WiFi and syncs time via NTP
+2. Sends `GET http://<pi-ip>:9090/send?device=ESP32-S3&time=<timestamp>`
+3. Pi relay sends email to `rafael@rgross.ch` via SMTP SSL
+
+**Run the relay on the Pi:**
+```bash
+python3 pi_mail_relay.py
+# Listening on :9090
+```
+
+**Build and flash the firmware:**
+```bash
+cd workbench_email
+idf.py set-target esp32s3
+idf.py -p /dev/ttyACM0 flash monitor
+```
+
 ## Project files
 
 ```
-main/led_blink_main.c   — código do firmware
-documents/fsd.md        — especificação funcional completa
-documents/blink-idea.md — notas originais do projeto
+main/led_blink_main.c               — firmware principal (relógio suíço)
+workbench_email/                    — notificação por email via relay no Pi
+  main/workbench_email.c            — firmware ESP32-S3 (WiFi + NTP + HTTP)
+  pi_mail_relay.py                  — relay HTTP→SMTP no Pi
+documents/fsd.md                    — especificação funcional completa
+documents/blink-idea.md             — notas originais do projeto
 ```
