@@ -1,32 +1,49 @@
 # SwissLedClock
 
-The onboard RGB LED on your ESP32-S3 blinks like a Swiss clock — once every 15 minutes to mark the quarter hours, and at the top of every hour it strikes four times plus once for each hour (just like the bells on a real clock).
+A beautiful RGB LED clock on your Waveshare ESP32-S3-Zero that blinks like a Swiss chime clock — with colorful LED shows for every quarter hour and a special "go to sleep" message at 23:30. 🔔
 
 On startup it connects to WiFi and syncs the time automatically via NTP (Bern/Zurich timezone).
 
 ## How it works
 
-| Time | What you see |
-|------|--------------|
-| :15 past | 1 blink |
-| :30 past | 2 blinks |
-| :45 past | 3 blinks |
-| Top of hour | 4 blinks, short pause, then N blinks for the hour (1–12) |
+The LED displays the time with color-coded signals:
 
-After 12 o'clock the cycle starts over at 1.
+| Time | LED Color | Pattern |
+|------|-----------|---------|
+| Every minute | 🟢 Green | 1 blink (minute indicator) |
+| :15 past | 🌈 Rainbow | 1x full color show (Red→Orange→Yellow→Green→Blue→Indigo→Violet) |
+| :30 past | 🌈 Rainbow | 2x full color shows |
+| :45 past | 🌈 Rainbow | 3x full color shows |
+| **Top of hour (00 min)** | 🌈 Rainbow | **4x full color shows**, then 🔴 N red blinks for the hour (1–12) |
+
+After each hour on the hour, an email is sent to `rafael@rgross.ch` with the current time.
+
+### Special case: 23:30 (bedtime)
+
+At 23:30, the clock sends a special email message:
+> **RAFA! Time to sleep NOW and STOP DRINKING!**
+
+Then it enters sleep mode for 30 minutes before resuming normal operation.
 
 ## Hardware
 
-- **Board:** ESP32-S3-DevKitC-1
-- **LED:** Onboard WS2812 RGB on GPIO 48
+- **Board:** Waveshare ESP32-S3-Zero
+- **LED:** Onboard WS2812 RGB on **GPIO 21**
 - **Framework:** ESP-IDF 5.4
+- **Networking:** WiFi (RG-IoT) + NTP time sync
+- **Email:** HTTP relay via Pi (192.168.0.50:9090)
 
 ## Build and flash
 
 ```bash
-. ~/esp/esp-idf/export.sh
-idf.py -C ~/esp/SwissLedClock set-target esp32s3
-idf.py -C ~/esp/SwissLedClock -p /dev/ttyACM1 build flash monitor
+cd ~/SwissLedClock
+source ~/esp/esp-idf/export.sh
+
+# Set target (only once)
+idf.py set-target esp32s3
+
+# Build and flash
+idf.py -p /dev/ttyACM1 build flash
 ```
 
 > Run `set-target esp32s3` only once, or when switching boards.
@@ -37,27 +54,25 @@ Open `main/led_blink_main.c` and change the constants at the top:
 
 | Constant | Default | What it does |
 |----------|---------|--------------|
-| `LED_PIN` | 48 | GPIO do LED WS2812 (48 no S3-DevKitC-1) |
-| `BLINK_ON_MS` | 200 ms | Tempo que o LED fica aceso por piscada |
-| `BLINK_OFF_MS` | 200 ms | Intervalo entre piscadas |
-| `CHIME_PAUSE_MS` | 800 ms | Pausa entre batidas dos quartos e da hora |
+| `LED_PIN` | 21 | GPIO do LED WS2812 (21 no Waveshare ESP32-S3-Zero) |
+| `BLINK_ON_MS` | 150 ms | Tempo que o LED fica aceso por piscada |
+| `BLINK_OFF_MS` | 150 ms | Intervalo entre piscadas |
+| `PAUSE_MS` | 600 ms | Pausa entre shows e blinks |
 | `WIFI_SSID` | `"RG-IoT"` | Nome da rede WiFi |
 | `WIFI_PASS` | `"rafa123$$$"` | Senha da rede WiFi |
-| `LED_COLOR_R/G/B` | 20, 20, 20 | Cor do LED (0–255 cada canal) |
 
-## Email notification (workbench_email)
+## Email notifications
 
-A companion project that connects to WiFi, syncs the current time via NTP, and sends an email notification through a relay server running on the Pi.
+The clock sends email through an HTTP relay on the Pi:
 
-| Component | Description |
-|-----------|-------------|
-| `workbench_email/main/workbench_email.c` | ESP32-S3 firmware — WiFi + NTP + HTTP POST to relay |
-| `workbench_email/pi_mail_relay.py` | Python relay server on the Pi — receives HTTP and sends SMTP email |
+**What gets sent:**
+- Every hour on the hour: Email with current time
+- 23:30: Special "time to sleep" message with warning about drinking
 
 **How it works:**
 1. ESP32 connects to WiFi and syncs time via NTP
-2. Sends `GET http://<pi-ip>:9090/send?device=ESP32-S3&time=<timestamp>`
-3. Pi relay sends email to `rafael@rgross.ch` via SMTP SSL
+2. Sends `GET http://192.168.0.50:9090/send?device=SwissLedClock&subject=<subject>&message=<msg> at <time>`
+3. Pi relay (running `workbench_email/pi_mail_relay.py`) receives HTTP and forwards to SMTP
 
 **Run the relay on the Pi:**
 ```bash
@@ -65,20 +80,23 @@ python3 pi_mail_relay.py
 # Listening on :9090
 ```
 
-**Build and flash the firmware:**
-```bash
-cd workbench_email
-idf.py set-target esp32s3
-idf.py -p /dev/ttyACM0 flash monitor
-```
-
 ## Project files
 
 ```
-main/led_blink_main.c               — firmware principal (relógio suíço)
+main/led_blink_main.c               — firmware principal (relógio suíço com LED RGB)
 workbench_email/                    — notificação por email via relay no Pi
   main/workbench_email.c            — firmware ESP32-S3 (WiFi + NTP + HTTP)
   pi_mail_relay.py                  — relay HTTP→SMTP no Pi
 documents/fsd.md                    — especificação funcional completa
 documents/blink-idea.md             — notas originais do projeto
 ```
+
+## Features
+
+✅ Automatic time sync via NTP  
+✅ Colorful LED shows at quarter hours  
+✅ Red hour chimes (1-12 blinks)  
+✅ Email notifications every hour  
+✅ Special bedtime alarm at 23:30  
+✅ WiFi-enabled (works anywhere with connectivity)  
+✅ Waveshare ESP32-S3-Zero compatible

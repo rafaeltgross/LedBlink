@@ -13,10 +13,10 @@
 #include <string.h>
 
 #define TAG               "SwissLedClock"
-#define LED_PIN           21       /* GPIO21 = LED WS2812 on Waveshare ESP32-S3-Zero */
-#define BLINK_ON_MS       200
-#define BLINK_OFF_MS      200
-#define PAUSE_MS          800
+#define LED_PIN           21
+#define BLINK_ON_MS       150
+#define BLINK_OFF_MS      150
+#define PAUSE_MS          600
 
 #define WIFI_SSID         "RG-IoT"
 #define WIFI_PASS         "rafa123$$$"
@@ -86,6 +86,30 @@ static void blink_color(led_strip_handle_t strip, int count, uint8_t r, uint8_t 
     }
 }
 
+static void led_show(led_strip_handle_t strip, int repeats)
+{
+    uint8_t colors[][3] = {
+        {255, 0, 0},      /* Red */
+        {255, 165, 0},    /* Orange */
+        {255, 255, 0},    /* Yellow */
+        {0, 255, 0},      /* Green */
+        {0, 0, 255},      /* Blue */
+        {75, 0, 130},     /* Indigo */
+        {148, 0, 211},    /* Violet */
+    };
+    int num_colors = sizeof(colors) / sizeof(colors[0]);
+
+    for (int rep = 0; rep < repeats; rep++) {
+        for (int i = 0; i < num_colors; i++) {
+            ESP_ERROR_CHECK(led_strip_set_pixel(strip, 0, colors[i][0], colors[i][1], colors[i][2]));
+            ESP_ERROR_CHECK(led_strip_refresh(strip));
+            vTaskDelay(pdMS_TO_TICKS(150));
+        }
+        ESP_ERROR_CHECK(led_strip_clear(strip));
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+
 static void send_email(const char *subject, const char *message)
 {
     time_t now;
@@ -96,7 +120,7 @@ static void send_email(const char *subject, const char *message)
     char time_str[64];
     strftime(time_str, sizeof(time_str), "%d/%m/%Y %H:%M:%S", &t);
 
-    char url[512];
+    char url[768];
     snprintf(url, sizeof(url), "%s?device=SwissLedClock&subject=%s&message=%s at %s",
              RELAY_URL, subject, message, time_str);
 
@@ -182,40 +206,49 @@ void app_main(void)
         int hour = t.tm_hour;
         int minute = t.tm_min;
 
-        /* Check if it's time to go to sleep (23:30) */
+        /* Special message at 23:30 */
         if (hour == 23 && minute == 30 && last_minute_30 != 30) {
             last_minute_30 = 30;
-            ESP_LOGI(TAG, "Good night! Going to sleep...");
-            blink_color(strip, 3, 255, 165, 0);  /* 3 orange blinks */
-            send_email("Sleep", "Time+to+sleep");
-            vTaskDelay(pdMS_TO_TICKS(30 * 60 * 1000));  /* Sleep for 30 minutes */
+            ESP_LOGI(TAG, "RAFA! Time to sleep NOW and stop drinking!");
+            led_show(strip, 4);
+            send_email("SLEEP+NOW!", "Rafa+must+sleep+IMMEDIATELY+and+STOP+DRINKING+NOW!");
+            vTaskDelay(pdMS_TO_TICKS(30 * 60 * 1000));
         } else if (hour != 23 || minute != 30) {
             last_minute_30 = -1;
         }
 
-        /* Top of hour: yellow blink, then red blinks for hour, then send email */
+        /* Top of hour: 4x rainbow show, red blinks for hour, send email */
         if (minute == 0) {
             if (last_hour != hour) {
                 last_hour = hour;
-                ESP_LOGI(TAG, "Top of hour! %02d:%02d", hour, minute);
+                ESP_LOGI(TAG, "Top of hour! %02d:00", hour);
 
-                /* Yellow blink for top of hour */
-                blink_color(strip, 1, 255, 255, 0);
+                led_show(strip, 4);
                 vTaskDelay(pdMS_TO_TICKS(PAUSE_MS));
 
-                /* Red blinks for current hour */
                 int blinks = hour % 12;
                 if (blinks == 0) blinks = 12;
                 blink_color(strip, blinks, 255, 0, 0);
                 vTaskDelay(pdMS_TO_TICKS(PAUSE_MS));
 
-                /* Send email */
                 char time_str[32];
                 strftime(time_str, sizeof(time_str), "%H:%M", &t);
                 send_email("Hour", time_str);
             }
+        } else if (minute == 15) {
+            /* 15min: 1x show */
+            ESP_LOGI(TAG, "Quarter hour (15 min)");
+            led_show(strip, 1);
+        } else if (minute == 30) {
+            /* 30min: 2x show */
+            ESP_LOGI(TAG, "Half hour (30 min)");
+            led_show(strip, 2);
+        } else if (minute == 45) {
+            /* 45min: 3x show */
+            ESP_LOGI(TAG, "Three quarters (45 min)");
+            led_show(strip, 3);
         } else {
-            /* Green blink for every minute (not on the hour) */
+            /* Every other minute: green blink */
             blink_color(strip, 1, 0, 255, 0);
         }
     }
