@@ -30,7 +30,8 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             msg = email.message.EmailMessage()
-            msg["From"]    = SMTP_USER
+            msg["From"]    = EMAIL_FROM_ALIAS
+            msg["Sender"]  = SMTP_USER
             msg["To"]      = EMAIL_TO
             msg["Subject"] = email_subject
             msg.set_content(email_body)
